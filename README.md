@@ -6,15 +6,21 @@ Zoney is a program which takes YAML source files and builds BIND 9 zone files, o
 
 Build any destination zones which are older than the source YAML file:
 ```shell
+rndc freeze
 zoney-build
+rndc reload
+rndc thaw
 ```
 
 Build one or more individual zones:
 ```shell
+rndc freeze
 zoney-build /etc/bind/zones/example.com.yaml /etc/bind/zones/example2.com.yaml
+rndc reload
+rndc thaw
 ```
 
-Explicitly build all zones, forcing the update of the serials (needed periodically for DNSSEC re-signing):
+Explicitly build all zones, forcing the update of the serials (needed periodically for DNSSEC re-signing, when you are doing the signing):
 ```shell
 rndc freeze
 zoney-build --update-serials /etc/bind/zones/*.yaml
@@ -41,9 +47,7 @@ zone: example.com.
 filename: 'example.com.zone'
 
 # Whether to DNSSEC sign the zone
-# Default: true if a key is detected, otherwise false
-# A key is detected if there is an include (see below) which starts with
-# "K" and ends with ".key"
+# Default: false
 sign: true
 
 # Default record TTL

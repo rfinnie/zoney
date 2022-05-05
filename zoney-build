@@ -47,7 +47,7 @@ class ZoneyBuild:
             "--filename-format", default="{zone}.zone", help="Default filename format"
         )
         parser.add_argument(
-            "sources", nargs="+", type=pathlib.Path, help="Source YAML files"
+            "sources", nargs="*", type=pathlib.Path, help="Source YAML files"
         )
 
         return parser.parse_args(args=argv[1:])
@@ -56,8 +56,14 @@ class ZoneyBuild:
         out = []
         for yaml_file in self.args.source_dir.glob("*.yaml"):
             with yaml_file.open() as f:
-                zone = yaml.safe_load(f)["zone"].rstrip(".")
-            zone_file = self.args.dest_dir.joinpath(zone)
+                indata = yaml.safe_load(f)
+                zone = indata["zone"]
+                if not zone.endswith("."):
+                    zone = zone + "."
+                filename = indata.get("filename", self.args.filename_format).format(
+                    zone=zone.rstrip(".")
+                )
+                zone_file = self.args.dest_dir.joinpath(filename)
             if not zone_file.exists():
                 out.append(yaml_file)
             elif yaml_file.stat().st_mtime > zone_file.stat().st_mtime:
@@ -72,14 +78,7 @@ class ZoneyBuild:
         if not zone.endswith("."):
             zone = zone + "."
         includes = [pathlib.Path(x) for x in indata.get("include", [])]
-        if indata.get("sign") is not None:
-            sign_zone = bool(indata["sign"])
-        elif [
-            x for x in includes if x.name.startswith("K") and x.name.endswith(".key")
-        ]:
-            sign_zone = True
-        else:
-            sign_zone = False
+        sign_zone = indata.get("sign", False)
         zone_ttl = indata["ttl"] if indata.get("ttl") is not None else self.args.ttl
         f_temp = tempfile.NamedTemporaryFile(mode="w")
         print("$TTL {}".format(zone_ttl), file=f_temp)
