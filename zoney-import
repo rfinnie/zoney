@@ -1,0 +1,52 @@
+#!/usr/bin/env python3
+
+# SPDX-FileComment: zoney-import
+# SPDX-FileCopyrightText: Copyright (C) 2022 Ryan Finnie
+# SPDX-License-Identifier: MPL-2.0
+
+# This is a simple parser for a normalized zone format (either through
+# `named-checkzone -D` or `dig -t axfr`) to Zoney's YAML format.)
+
+import re
+import sys
+
+import yaml
+
+
+zone = sys.argv[1]
+if not zone.endswith("."):
+    zone = zone + "."
+
+out = {"zone": zone, "ttl": 3600, "records": []}
+
+seen_soa = False
+for line in sys.stdin.readlines():
+    line = line.strip()
+    if (not line) or line.startswith(";"):
+        continue
+    (name, ttl, record_class, record_type, record_data) = re.split(r"[\t ]+", line, 4)
+    if record_type in ("NSEC3", "RRSIG", "NSEC3PARAM", "DNSKEY"):
+        continue
+    if record_type == "SOA":
+        # If `dig -t axfr` is used, the SOA record will be duplicated,
+        # because the SOA is always displayed first.
+        if seen_soa:
+            continue
+        seen_soa = True
+    if name == out["zone"]:
+        name = "@"
+    elif name.endswith(".{}".format(out["zone"])):
+        name = name[: (0 - len(out["zone"]) - 1)]
+    ttl = int(ttl)
+    if ttl == out["ttl"] and record_class == "IN":
+        record = [name, record_type, record_data]
+    else:
+        record = {"name": name, "type": record_type, "data": record_data}
+        if ttl != out["ttl"]:
+            record["ttl"] = ttl
+        if record_class != "IN":
+            record["class"] = record_class
+    out["records"].append(record)
+
+out["records"].sort(key=lambda x: (x[0] if isinstance(x, (list, tuple)) else x["name"]))
+yaml.dump(out, sys.stdout, default_flow_style=None, sort_keys=False)

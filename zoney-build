@@ -1,0 +1,172 @@
+#!/usr/bin/env python3
+
+# SPDX-FileComment: zoney-build
+# SPDX-FileCopyrightText: Copyright (C) 2022 Ryan Finnie
+# SPDX-License-Identifier: MPL-2.0
+
+import argparse
+import logging
+import pathlib
+import random
+import subprocess
+import sys
+import tempfile
+import time
+
+import yaml
+
+
+class ZoneyBuild:
+    def parse_args(self, argv=None):
+        if argv is None:
+            argv = sys.argv
+
+        parser = argparse.ArgumentParser(
+            formatter_class=argparse.ArgumentDefaultsHelpFormatter
+        )
+        parser.add_argument(
+            "--debug", action="store_true", help="Print debugging information"
+        )
+        parser.add_argument(
+            "--source-dir",
+            default="/etc/bind/zones",
+            type=pathlib.Path,
+            help="Source YAML directory",
+        )
+        parser.add_argument(
+            "--dest-dir",
+            default="/var/lib/bind/zones",
+            type=pathlib.Path,
+            help="Destination zone directory",
+        )
+        parser.add_argument(
+            "--update-serials", action="store_true", help="Always update serials"
+        )
+        parser.add_argument("--ttl", default=3600, type=int, help="Default TTL")
+        parser.add_argument(
+            "--filename-format", default="{zone}.zone", help="Default filename format"
+        )
+        parser.add_argument(
+            "sources", nargs="+", type=pathlib.Path, help="Source YAML files"
+        )
+
+        return parser.parse_args(args=argv[1:])
+
+    def find_updates(self):
+        out = []
+        for yaml_file in self.args.source_dir.glob("*.yaml"):
+            with yaml_file.open() as f:
+                zone = yaml.safe_load(f)["zone"].rstrip(".")
+            zone_file = self.args.dest_dir.joinpath(zone)
+            if not zone_file.exists():
+                out.append(yaml_file)
+            elif yaml_file.stat().st_mtime > zone_file.stat().st_mtime:
+                out.append(yaml_file)
+        return out
+
+    def process_zone(self, yaml_file):
+        with yaml_file.open() as f:
+            indata = yaml.safe_load(f)
+
+        zone = indata["zone"]
+        if not zone.endswith("."):
+            zone = zone + "."
+        includes = [pathlib.Path(x) for x in indata.get("include", [])]
+        if indata.get("sign") is not None:
+            sign_zone = bool(indata["sign"])
+        elif [
+            x for x in includes if x.name.startswith("K") and x.name.endswith(".key")
+        ]:
+            sign_zone = True
+        else:
+            sign_zone = False
+        zone_ttl = indata["ttl"] if indata.get("ttl") is not None else self.args.ttl
+        f_temp = tempfile.NamedTemporaryFile(mode="w")
+        print("$TTL {}".format(zone_ttl), file=f_temp)
+        for record in indata.get("records", []):
+            if isinstance(record, str):
+                if not record.endswith("\n"):
+                    record = record + "\n"
+                f_temp.write(record)
+                continue
+            elif isinstance(record, (list, tuple)):
+                name, record_type, record_data = record
+                ttl = zone_ttl
+                record_class = "IN"
+            else:
+                name = record["name"]
+                ttl = record["ttl"] if record.get("ttl") is not None else zone_ttl
+                record_class = record.get("class", "IN")
+                record_type = record["type"]
+                record_data = record["data"]
+            record_class = record_class.upper()
+            record_type = record_type.upper()
+            if name == "@":
+                name = zone
+            elif not name.endswith("."):
+                name = "{}.{}".format(name, zone)
+            if record_type == "SOA":
+                soa_fields = record_data.split(" ")
+                if soa_fields[2] == "0":
+                    if self.args.update_serials:
+                        soa_fields[2] = str(int(time.time()))
+                    else:
+                        soa_fields[2] = str(int(yaml_file.stat().st_mtime))
+                record_data = " ".join(soa_fields)
+
+            print(
+                "{} {} {} {} {}".format(
+                    name, ttl, record_class, record_type, record_data
+                ),
+                file=f_temp,
+            )
+
+        for include_file in includes:
+            f_temp.write(self.args.dest_dir.joinpath(include_file).read_text())
+
+        f_temp.flush()
+
+        filename = indata.get("filename", self.args.filename_format).format(
+            zone=zone.rstrip(".")
+        )
+
+        out_file = self.args.dest_dir.joinpath(filename)
+        if sign_zone:
+            subprocess.check_call(
+                ["named-checkzone", "-w", str(self.args.dest_dir), zone, f_temp.name]
+            )
+
+            salt = bytearray([random.randint(0, 255) for x in range(8)]).hex()
+            subprocess.check_call(
+                ["dnssec-signzone", "-A"]
+                + ["-3", salt]
+                + ["-N", "keep"]
+                + ["-o", zone]
+                + ["-f", str(out_file)]
+                + ["-t", f_temp.name],
+                cwd=self.args.dest_dir,
+            )
+        else:
+            subprocess.check_call(
+                ["named-compilezone", "-D"]
+                + ["-o", str(out_file)]
+                + ["-w", str(self.args.dest_dir)]
+                + [zone]
+                + [f_temp.name]
+            )
+
+    def main(self):
+        self.args = self.parse_args()
+        logging.basicConfig(
+            level=(logging.DEBUG if self.args.debug else logging.INFO),
+            format="%(asctime)s %(levelname)s: %(message)s",
+        )
+
+        if not self.args.sources:
+            self.args.sources = self.find_updates()
+        for yaml_file in self.args.sources:
+            self.process_zone(yaml_file)
+
+
+if __name__ == "__main__":
+    sys.exit(ZoneyBuild().main())
