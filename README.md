@@ -12,7 +12,7 @@ rndc reload
 rndc thaw
 ```
 
-Build one or more individual zones:
+Or build one or more individual zones:
 ```shell
 rndc freeze
 zoney-build /etc/bind/zones/example.com.yaml /etc/bind/zones/example2.com.yaml
@@ -20,17 +20,7 @@ rndc reload
 rndc thaw
 ```
 
-Explicitly build all zones, forcing the update of the serials (needed periodically for DNSSEC re-signing, when you are doing the signing):
-```shell
-rndc freeze
-zoney-build --update-serials /etc/bind/zones/*.yaml
-rndc reload
-rndc thaw
-```
-
 This system makes no attempt to re-integrate dynamically-updated zones at the BIND level.  The author's BIND server does allow for dynamic updates on a few zones, but they're just for Let's Encrypt wildcard verification and so changes do not need to be re-integrated.  The freeze/build/reload/thaw example above will safely discard any journal which has been created for a zone between builds.
-
-If using DNSSEC signing, it is assumed the private keys (and by default, the public keys) are in the destination directory with the zones.
 
 ## Configuration
 
@@ -45,10 +35,6 @@ zone: example.com.
 # May be absolute, or relative to --dest-dir.
 # {zone} will be replaced with the zone name (without ending period).
 filename: 'example.com.zone'
-
-# Whether to DNSSEC sign the zone
-# Default: false
-sign: true
 
 # Default record TTL
 # Default: --ttl (3600)
@@ -95,15 +81,82 @@ records:
     raw1.example.com. IN A 192.0.2.4
     raw2.example.com. IN A 192.0.2.5
 
-# Include files of normal zone entries
+# Whether Zoney itself handles DNSSEC signing the zone
+# Default: false
+sign: false
+
+# Include files of normal BIND zone entries.
+# Needed when Zoney itself manages DNSSEC signing.
 # Default: []
 # May be absolute, or relative to --dest-dir.
 include: [Kexample.com.+008+20974.key, Kexample.com.+008+48993.key]
 ```
 
+## Suggested layout
+
+### Normal (with optional BIND-managed DNSSEC signing)
+
+Place your YAML source files in `/etc/bind/zones/`, along with a `Makefile`:
+```makefile
+all:
+    rndc freeze
+    rndc sync
+    sudo -H -u bind zoney-build
+    rndc reload
+    rndc thaw
+```
+
+Compiled zones and peripheral files go in `/var/lib/bind/zones/`, and need to be owned by the "bind" user.
+
+A BIND config might look like this, allowing for Certbot (Let's Encrypt) verification, as well as automatic DNSSEC signature management (via `dnssec-policy default`):
+```
+options {
+  directory "/var/cache/bind";
+  key-directory "/var/lib/bind/zones";
+};
+
+key "certbot-letsencrypt." {
+  algorithm hmac-sha512;
+  secret "LongBase64String==";
+};
+
+zone "example.com" {
+  type master;
+  file "/var/lib/bind/zones/example.com.zone";
+  update-policy {
+    grant certbot-letsencrypt. name _acme-challenge.example.com. txt;
+  };
+  dnssec-policy default;
+};
+```
+
+### Zoney-managed DNSSEC signing
+
+*Note that the author no longer uses this method, in favor of BIND-managed signature management above.*
+
+Source YAML files will need the following:
+
+```yaml
+sign: true
+include: [Kexample.com.+008+20974.key, Kexample.com.+008+48993.key]
+```
+
+Full re-signing needs to be done periodically (can be cronned for weekly), which requires explicitly bumping the serials:
+```shell
+rndc freeze
+zoney-build --update-serials /etc/bind/zones/*.yaml
+rndc reload
+rndc thaw
+```
+
+It is assumed the private keys (and by default, the public keys) are in the destination directory with the zones.
+
+*To do: BIND zone config*
+
+
 ## License
 
-Copyright (C) 2022 [Ryan Finnie](https://www.finnie.org/)
+Copyright (C) 2022-2023 [Ryan Finnie](https://www.finnie.org/)
 
 This Source Code Form is subject to the terms of the Mozilla Public
 License, v. 2.0. If a copy of the MPL was not distributed with this
