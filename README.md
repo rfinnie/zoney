@@ -156,8 +156,11 @@ It is assumed the private keys (and by default, the public keys) are in the dest
 
 ## License
 
-Copyright (C) 2022-2023 [Ryan Finnie](https://www.finnie.org/)
+This document is provided under the following license:
 
-This Source Code Form is subject to the terms of the Mozilla Public
-License, v. 2.0. If a copy of the MPL was not distributed with this
-file, You can obtain one at http://mozilla.org/MPL/2.0/.
+    SPDX-PackageName: zoney
+    SPDX-PackageSupplier: Ryan Finnie <ryan@finnie.org>
+    SPDX-PackageDownloadLocation: https://github.com/rfinnie/zoney
+    SPDX-FileComment: README
+    SPDX-FileCopyrightText: SPDX-FileCopyrightText: © 2022 Ryan Finnie <ryan@finnie.org>
+    SPDX-License-Identifier: CC-BY-SA-4.0

@@ -1,0 +1,28 @@
+# SPDX-PackageName: zoney
+# SPDX-PackageSupplier: Ryan Finnie <ryan@finnie.org>
+# SPDX-PackageDownloadLocation: https://github.com/rfinnie/zoney
+# SPDX-FileComment: pyproject configs
+# SPDX-FileCopyrightText: © 2026 Ryan Finnie <ryan@finnie.org>
+# SPDX-License-Identifier: MPL-2.0
+[project]
+name = "zoney"
+authors = [
+    {name = "Ryan Finnie", email = "ryan@finnie.org"},
+]
+description = "Builds BIND 9 zone files from YAML files"
+readme = "README.md"
+requires-python = ">=3.8"
+license = "MPL-2.0"
+dependencies = [
+    "PyYAML",
+]
+dynamic = ["version"]
+
+[tool.setuptools]
+script-files = ["zoney-build", "zoney-import"]
+
+[tool.setuptools.packages.find]
+include = []
+
+[tool.black]
+line-length = 132

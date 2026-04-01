@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 
-# SPDX-FileComment: zoney-build
-# SPDX-FileCopyrightText: Copyright (C) 2022 Ryan Finnie
+# SPDX-PackageName: zoney
+# SPDX-PackageSupplier: Ryan Finnie <ryan@finnie.org>
+# SPDX-PackageDownloadLocation: https://github.com/rfinnie/zoney
+# SPDX-FileCopyrightText: © 2022 Ryan Finnie <ryan@finnie.org>
 # SPDX-License-Identifier: MPL-2.0
 
 import argparse
@@ -21,12 +23,8 @@ class ZoneyBuild:
         if argv is None:
             argv = sys.argv
 
-        parser = argparse.ArgumentParser(
-            formatter_class=argparse.ArgumentDefaultsHelpFormatter
-        )
-        parser.add_argument(
-            "--debug", action="store_true", help="Print debugging information"
-        )
+        parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+        parser.add_argument("--debug", action="store_true", help="Print debugging information")
         parser.add_argument(
             "--source-dir",
             default="/etc/bind/zones",
@@ -39,16 +37,10 @@ class ZoneyBuild:
             type=pathlib.Path,
             help="Destination zone directory",
         )
-        parser.add_argument(
-            "--update-serials", action="store_true", help="Always update serials"
-        )
+        parser.add_argument("--update-serials", action="store_true", help="Always update serials")
         parser.add_argument("--ttl", default=3600, type=int, help="Default TTL")
-        parser.add_argument(
-            "--filename-format", default="{zone}.zone", help="Default filename format"
-        )
-        parser.add_argument(
-            "sources", nargs="*", type=pathlib.Path, help="Source YAML files"
-        )
+        parser.add_argument("--filename-format", default="{zone}.zone", help="Default filename format")
+        parser.add_argument("sources", nargs="*", type=pathlib.Path, help="Source YAML files")
 
         return parser.parse_args(args=argv[1:])
 
@@ -60,9 +52,7 @@ class ZoneyBuild:
                 zone = indata["zone"]
                 if not zone.endswith("."):
                     zone = zone + "."
-                filename = indata.get("filename", self.args.filename_format).format(
-                    zone=zone.rstrip(".")
-                )
+                filename = indata.get("filename", self.args.filename_format).format(zone=zone.rstrip("."))
                 zone_file = self.args.dest_dir.joinpath(filename)
             if not zone_file.exists():
                 out.append(yaml_file)
@@ -114,9 +104,7 @@ class ZoneyBuild:
                 record_data = " ".join(soa_fields)
 
             print(
-                "{} {} {} {} {}".format(
-                    name, ttl, record_class, record_type, record_data
-                ),
+                "{} {} {} {} {}".format(name, ttl, record_class, record_type, record_data),
                 file=f_temp,
             )
 
@@ -125,15 +113,11 @@ class ZoneyBuild:
 
         f_temp.flush()
 
-        filename = indata.get("filename", self.args.filename_format).format(
-            zone=zone.rstrip(".")
-        )
+        filename = indata.get("filename", self.args.filename_format).format(zone=zone.rstrip("."))
 
         out_file = self.args.dest_dir.joinpath(filename)
         if sign_zone:
-            subprocess.check_call(
-                ["named-checkzone", "-w", str(self.args.dest_dir), zone, f_temp.name]
-            )
+            subprocess.check_call(["named-checkzone", "-w", str(self.args.dest_dir), zone, f_temp.name])
 
             salt = bytearray([random.randint(0, 255) for x in range(8)]).hex()
             subprocess.check_call(
@@ -147,11 +131,7 @@ class ZoneyBuild:
             )
         else:
             subprocess.check_call(
-                ["named-compilezone", "-D"]
-                + ["-o", str(out_file)]
-                + ["-w", str(self.args.dest_dir)]
-                + [zone]
-                + [f_temp.name]
+                ["named-compilezone", "-D"] + ["-o", str(out_file)] + ["-w", str(self.args.dest_dir)] + [zone] + [f_temp.name]
             )
 
     def main(self):
