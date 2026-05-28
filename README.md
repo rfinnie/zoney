@@ -1,5 +1,8 @@
 # Zoney
 
+[![Git forge repository](https://img.shields.io/badge/git-forge-orange?logo=forgejo)](https://forge.colobox.com/rfinnie/zoney)
+[![CI pipeline status](https://woodpecker.colobox.com/api/badges/35/status.svg)](https://woodpecker.colobox.com/repos/35)
+
 Zoney is a program which takes YAML source files and builds BIND 9 zone files, optionally DNSSEC signing them in the process.
 
 ## Usage
